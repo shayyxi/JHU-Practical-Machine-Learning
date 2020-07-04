@@ -1,0 +1,178 @@
+---
+output: 
+  html_document:
+    keep_md: true
+---
+
+# Topic: Practical Machine Learning Final Assignment
+# Author: Muhammad Shahzaib Siddiqui
+
+## Description
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+## Source of Data
+http://groupware.les.inf.puc-rio.br/har
+
+Training Data:
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+Testing Data:
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+## Loading useful libraries
+
+```{r , message=FALSE, warning=FALSE}
+library(rpart)
+library(caret)
+library(gbm)
+library(e1071)
+library(randomForest)
+library(rattle)
+library(rpart.plot)
+```
+
+
+## Reading Data
+
+```{r, message=FALSE, warning=FALSE}
+training <- read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv")
+testing <- read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv")
+```
+
+## Exploratory Analysis
+
+```{r}
+colnames(training)
+```
+
+```{r}
+ncol(training)
+```
+
+As we can observe that there are few initial columns in dataset which are totally useless to the algorithms so we will drop them.
+And there are many columns in the dataset which might not be all useful. 
+We will investigate the usefulness of columns further.
+
+We are removing the columns with NA values.
+We are also removing the initial 7 columns as they are identifiers and would have no contribution in algorithms. 
+
+```{r, message=FALSE, warning=FALSE}
+training<-training[ , colSums(is.na(training)) == 0]
+training<-training[,-c(1:7)]
+```
+In the machine learning algorithms, the columns with zero or near zero variance are not useful, se we will drop them as well. 
+Let`s investigate such columns.  
+
+```{r, message=FALSE, warning=FALSE}
+zerovar<-nearZeroVar(training,saveMetrics=TRUE)
+```
+
+Let`s remove such columns.
+
+```{r, message=FALSE, warning=FALSE}
+train_data<-training[,zerovar$nzv==FALSE]
+```
+
+Now let`s see how many columns are available.
+
+```{r}
+ncol(train_data)
+```
+
+So now we are left with few columns which would be useful in classification algorithms. 
+
+## Model Fitting
+
+We have decidede to fit following models on our dataset.
+
+* Recursive Partitioning And Regression Trees
+* Random Forest
+* Linear Discriminant Analysis
+* Gradient Boosting Machine
+
+The model with the best accuracy will be chosen.
+
+Let`s partition the training data set so we can validate our models.
+Furthermore, we will make the classe variable as factors. 
+
+```{r, message=FALSE, warning=FALSE}
+inTrain<-createDataPartition(train_data$classe,p=0.70,list=FALSE)
+train_set<-train_data[inTrain,]
+test_set<-train_data[-inTrain,]
+```
+
+
+### Rpart Model
+
+```{r, cache=TRUE}
+treemod<-train(classe~.,train_set,method="rpart")
+fancyRpartPlot(treemod$finalModel)
+```
+
+### Random Forest Model
+
+```{r, message=FALSE, warning=FALSE, cache=TRUE}
+rfmod <- train(classe ~ ., data = train_set, method = "rf", ntree = 50)
+print(rfmod)
+```
+
+
+### LDA Model
+
+```{r, message=FALSE, warning=FALSE, cache=TRUE}
+ldamod <- train(classe ~ ., data = train_set, method = "lda")
+print(ldamod)
+```
+
+### GBM Model
+
+```{r, message=FALSE, warning=FALSE, cache=TRUE}
+gbmmod <- train(classe ~ ., data=train_set, method = "gbm", verbose=FALSE)
+print(gbmmod)
+```
+
+
+## Validating the Models
+
+Now we will validate our models on the test data and select the model with the greatest accuracy. 
+We will validate our models by classifying the test data then making confusion matrix. 
+
+```{r}
+predicttree<-predict(treemod,test_set)
+predictrf<-predict(rfmod,test_set)
+predictlda<-predict(ldamod,test_set)
+predictgbm<-predict(gbmmod,test_set)
+```
+
+```{r}
+matrix_tree<-confusionMatrix(predicttree,as.factor(test_set$classe))
+matrix_tree
+```
+
+```{r}
+matrix_rf<-confusionMatrix(predictrf,as.factor(test_set$classe))
+matrix_rf
+```
+
+```{r}
+matrix_lda<-confusionMatrix(predictlda,as.factor(test_set$classe))
+matrix_lda
+```
+
+```{r}
+matrix_gbm<-confusionMatrix(predictgbm,as.factor(test_set$classe))
+matrix_gbm
+```
+
+As we can observe that RF model has the highest accuracy. Hence, we will finally select it as the prediction model. 
+
+## Predicting Test Data
+
+```{r}
+predict_final<-predict(rfmod,testing)
+predict_final
+```
+
+
+
+
